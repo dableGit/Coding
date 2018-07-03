@@ -2,11 +2,11 @@ import os
 import hashlib
 import win32security
 import pywintypes
-from operator import itemgetter
+from operator import attrgetter
 
 
 SEARCHFOLDER = 'F:\\Coding'
-TRESHOLD = 10000
+TRESHOLD = 100
 CSV_SEP = ';'
 
 
@@ -48,67 +48,58 @@ def get_owner(file):
         return 'unknown'
 
 
-def csv_line(file):
-    ret = file['hash'] + CSV_SEP + file_size_MB(file['wasted_size']) + \
-        CSV_SEP + file_size_MB(file['size']) + \
-        CSV_SEP + file['owner'] + CSV_SEP
-    for path in file['paths']:
-        ret += path + CSV_SEP
-    ret += '\n'
+def csv_line(file_info):
+    ret = file_info.hash + CSV_SEP + file_size_MB(file_info.size) + \
+        CSV_SEP + file_info.folder + \
+        CSV_SEP + file_info.filename + \
+        CSV_SEP + file_info.owner + '\n'
     return ret
 
 
-def write_csv(file_list, duplicates_only=True):
+def write_csv(file_infos):
     outfile = open(SEARCHFOLDER + '\\out.csv', 'w')
 
-    # Sort list by wasted size
-    sorted_file_list = sorted(
-        file_list, key=itemgetter('wasted_size'), reverse=True)
+    # Sort list by hash
+    # sorted_file_infos = sorted(
+    # file_infos, key=itemgetter('file_infos'), reverse=True)
 
     # Write Header
-    outfile.write('Hash; Wasted Size; Size; Owner; Paths\n')
+    outfile.write('Hash; Size; Folder; Filename; Owner\n')
 
     # Write line per entry, depending on duplicate or not
-    for file in sorted_file_list:
-        if file['wasted_size'] < TRESHOLD:
-            continue
-        if duplicates_only:
-            if file['duplicate']:
-                outfile.write(csv_line(file))
-        else:
-            outfile.write(csv_line(file))
+    for file_info in file_infos:
+        if file_info.size > TRESHOLD:
+            outfile.write(csv_line(file_info))
 
     outfile.close()
 
 
-def get_file_list():
-    file_list = []
+def get_file_infos_list():
+    file_infos = []
     for folderName, _subfolders, filenames in os.walk(SEARCHFOLDER):
         for filename in filenames:
-            duplicate = False
-            fullpath = os.path.join(folderName, filename)
-            hash_md5 = hashfile(fullpath)
-            for file in file_list:
-                if file['hash'] == hash_md5:
-                    duplicate = True
-                    # print(file[hash_md5])
-                    file['duplicate'] = duplicate
-                    file['paths'].append(fullpath)
-                    file['wasted_size'] = file['size'] * \
-                        (len(file['paths']) - 1)
+            file_info = FileInfo(folderName, filename)
+            file_infos.append(file_info)
+    file_infos.sort(reverse=True)
+    return file_infos
 
-            if duplicate is False:
-                hash_dict = {'hash': hash_md5,
-                             'size': os.path.getsize(fullpath),
-                             'owner': get_owner(fullpath),
-                             'duplicate': duplicate,
-                             'paths': [fullpath, ],
-                             'wasted_size': 0}
 
-                file_list.append(hash_dict)
-    return file_list
+class FileInfo():
+    # hash_dict = {}
+
+    def __init__(self, folder, filename):
+        self.folder = folder
+        self.filename = filename
+        self.fullpath = os.path.join(folder, filename)
+        # FileInfo.hash_dict[hashfile(self.fullpath)].append(self)
+        self.hash = hashfile(self.fullpath)
+        self.size = os.path.getsize(self.fullpath)
+        self.owner = get_owner(self.fullpath)
+
+    def __lt__(self, other):
+        return self.size < other.size
 
 
 if __name__ == "__main__":
-    file_list = get_file_list()
-    write_csv(file_list)
+    file_infos = get_file_infos_list()
+    write_csv(file_infos)
