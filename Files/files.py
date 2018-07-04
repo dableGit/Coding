@@ -2,7 +2,6 @@ import os
 import hashlib
 import win32security
 import pywintypes
-from operator import attrgetter
 
 
 SEARCHFOLDER = 'F:\\Coding'
@@ -52,19 +51,16 @@ def csv_line(file_info):
     ret = file_info.hash + CSV_SEP + file_size_MB(file_info.size) + \
         CSV_SEP + file_info.folder + \
         CSV_SEP + file_info.filename + \
-        CSV_SEP + file_info.owner + '\n'
+        CSV_SEP + file_info.owner + \
+        CSV_SEP + str(file_info.duplicate) + '\n'
     return ret
 
 
 def write_csv(file_infos):
     outfile = open(SEARCHFOLDER + '\\out.csv', 'w')
 
-    # Sort list by hash
-    # sorted_file_infos = sorted(
-    # file_infos, key=itemgetter('file_infos'), reverse=True)
-
     # Write Header
-    outfile.write('Hash; Size; Folder; Filename; Owner\n')
+    outfile.write('Hash; Size; Folder; Filename; Owner; Duplicate\n')
 
     # Write line per entry, depending on duplicate or not
     for file_info in file_infos:
@@ -80,8 +76,11 @@ def get_file_infos_list():
         for filename in filenames:
             file_info = FileInfo(folderName, filename)
             file_infos.append(file_info)
-    file_infos.sort(reverse=True)
-    return file_infos
+            dups = [dup for dup in file_infos if dup.hash == file_info.hash]
+            if len(dups) > 1:
+                for dup in dups:
+                    dup.duplicate = True
+    return sorted(file_infos, reverse=True)
 
 
 class FileInfo():
@@ -95,7 +94,9 @@ class FileInfo():
         self.hash = hashfile(self.fullpath)
         self.size = os.path.getsize(self.fullpath)
         self.owner = get_owner(self.fullpath)
+        self.duplicate = False
 
+    # Needed for the sorted Function
     def __lt__(self, other):
         return self.size < other.size
 
